@@ -6,6 +6,7 @@ from google.protobuf.json_format import MessageToDict
 
 from jina.flow import Flow
 
+
 def read_data(fn):
     items = {}
     with open(fn, 'r', encoding='utf-8') as f:
@@ -28,6 +29,7 @@ def read_data(fn):
     for item in result[:10]:
         yield item
 
+
 def main():
     workspace_path = '/tmp/jina/webqa'
     os.environ['TMP_WORKSPACE'] = workspace_path
@@ -35,7 +37,11 @@ def main():
     flow = Flow().add(
         name='extractor', yaml_path='images/title_extractor/title_extractor.yml', needs='gateway'
     ).add(
-        name='encoder', yaml_path='images/encoder/encoder.yml', needs="extractor", timeout_ready=60000
+        name='encoder',
+        image='jinaai/hub.executors.encoders.nlp.transformers-hitscir',
+        needs='extractor',
+        timeout_ready=180000,
+        batch_size=10
     ).add(
         name='title_compound_chunk_indexer',
         yaml_path='images/title_compound_chunk_indexer/title_compound_chunk_indexer.yml', needs='encoder'
@@ -57,6 +63,7 @@ def main():
         with flow.build() as f:
             pr = lambda x: print_topk(x, fp)
             f.search(raw_bytes=read_data(data_fn), callback=pr)
+
 
 if __name__ == '__main__':
     main()

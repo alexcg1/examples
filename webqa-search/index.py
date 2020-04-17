@@ -22,29 +22,39 @@ def read_data(fn):
     for qid, value in items.items():
         value['qid'] = qid
         result.append(("{}".format(json.dumps(value, ensure_ascii=False))).encode("utf-8"))
+    print(f'total docs: {len(result)}')
 
     for item in result[:100]:
         yield item
+
+
 def main():
     workspace_path = '/tmp/jina/webqa'
     os.environ['TMP_WORKSPACE'] = workspace_path
     data_fn = os.path.join(workspace_path, "web_text_zh_valid.json")
     flow = Flow().add(
-        name='title_extractor', yaml_path='images/title_extractor/title_extractor.yml'
+        name='title_extractor',
+        yaml_path='images/title_extractor/title_extractor.yml'
     ).add(
-        name='title_meta_doc_indexer', yaml_path='images/title_meta_doc_indexer/title_meta_doc_indexer.yml',
-        needs='gateway'
+        name='title_meta_doc_indexer',
+        yaml_path='images/title_meta_doc_indexer/title_meta_doc_indexer.yml',
+        needs='gateway',
+        replicas=1,
     ).add(
-        name='title_encoder', yaml_path='images/encoder/encoder.yml', needs='title_extractor', timeout_ready=60000,
+        name='title_encoder',
+        image='jinaai/hub.executors.encoders.nlp.transformers-hitscir',
+        needs='title_extractor',
+        timeout_ready=1000000,
+        replicas=2
     ).add(
         name='title_compound_chunk_indexer',
-        yaml_path='images/title_compound_chunk_indexer/title_compound_chunk_indexer.yml', needs='title_encoder'
-    ).add(
-        name='merge', yaml_path='images/merger/merger.yml',
-        needs=['title_compound_chunk_indexer', 'title_meta_doc_indexer']
-    )
+        yaml_path='images/title_compound_chunk_indexer/title_compound_chunk_indexer.yml',
+        needs='title_encoder',
+        replicas=1,
+    ).join(['title_compound_chunk_indexer', 'title_meta_doc_indexer'])
     with flow.build() as f:
-        f.index(raw_bytes=read_data(data_fn))
+        f.index(raw_bytes=read_data(data_fn), batch_size=8, prefetch=10)
+
 
 if __name__ == '__main__':
     main()
